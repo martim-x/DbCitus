@@ -1,0 +1,90 @@
+version: "3.8"
+
+services:
+    citus-coordinator:
+        container_name: citus_coordinator
+        image: citusdata/citus:13.0.3
+        ports:
+            - "55432:5432" # координатор снаружи будет доступен на 55432
+        environment:
+            POSTGRES_USER: postgres
+            POSTGRES_PASSWORD: 111
+            PGUSER: postgres
+            PGPASSWORD: 111
+            POSTGRES_HOST_AUTH_METHOD: trust
+        labels:
+            - "com.citusdata.role=Master"
+
+    citus-worker-1:
+        container_name: citus_worker_1
+        image: citusdata/citus:13.0.3
+        volumes:
+            - healthcheck-volume:/healthcheck
+        depends_on:
+            - citus-coordinator
+            - citus-manager
+        environment:
+            POSTGRES_USER: postgres
+            POSTGRES_PASSWORD: 111
+            PGUSER: postgres
+            PGPASSWORD: 111
+            POSTGRES_HOST_AUTH_METHOD: trust
+        labels:
+            - "com.citusdata.role=Worker"
+        command: "/wait-for-manager.sh"
+
+    citus-worker-2:
+        container_name: citus_worker_2
+        image: citusdata/citus:13.0.3
+        volumes:
+            - healthcheck-volume:/healthcheck
+        depends_on:
+            - citus-coordinator
+            - citus-manager
+        environment:
+            POSTGRES_USER: postgres
+            POSTGRES_PASSWORD: 111
+            PGUSER: postgres
+            PGPASSWORD: 111
+            POSTGRES_HOST_AUTH_METHOD: trust
+        labels:
+            - "com.citusdata.role=Worker"
+        command: "/wait-for-manager.sh"
+
+    citus-worker-3:
+        container_name: citus_worker_3
+        image: citusdata/citus:13.0.3
+        volumes:
+            - healthcheck-volume:/healthcheck
+        depends_on:
+            - citus-coordinator
+            - citus-manager
+        environment:
+            POSTGRES_USER: postgres
+            POSTGRES_PASSWORD: 111
+            PGUSER: postgres
+            PGPASSWORD: 111
+            POSTGRES_HOST_AUTH_METHOD: trust
+        labels:
+            - "com.citusdata.role=Worker"
+        command: "/wait-for-manager.sh"
+
+    citus-manager:
+        container_name: citus_manager
+        image: citusdata/membership-manager:0.3.0
+        volumes:
+            - "/var/run/docker.sock:/var/run/docker.sock"
+            - healthcheck-volume:/healthcheck
+        depends_on:
+            - citus-coordinator
+        environment:
+            POSTGRES_USER: postgres
+            POSTGRES_PASSWORD: 111
+            PGUSER: postgres
+            PGPASSWORD: 111
+            POSTGRES_HOST_AUTH_METHOD: trust
+            CITUS_HOST: citus-coordinator
+            CITUS_PORT: 5432
+
+volumes:
+    healthcheck-volume:
