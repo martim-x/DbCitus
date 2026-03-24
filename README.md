@@ -1,65 +1,106 @@
-# Citus + Kubernetes — локальный распределённый кластер
+#locker #postgresql #citus #kubernetes #replication
+___
+## О проекте
 
-Локальный кластер Kubernetes с развёрнутым Citus: координатор + 5 воркеров, шардирование и репликация шардов.
+Изучение Kubernetes, PostgreSQL, Citus и логической репликации: развёртывание кластера, настройка шардирования, двунаправленной репликации между координаторами и глобального лок‑сервиса pg-locker для безопасного мультимастера.
 
----
 
-## Что сделано
+Стек: PostgreSQL 18, Citus, Kubernetes (kind / Docker Desktop).
 
-- Поднят Kubernetes-кластер (Docker Desktop, kind) с 3 нодами
-- Написан манифест `citus-config.yaml`: namespace, сервисы, StatefulSet координатора и 5 воркеров
-- Настроен headless Service для адресации каждого воркера по DNS
-- Зарегистрированы все 5 воркеров на координаторе через `citus_add_node`
-- Включено шардирование: 32 шарда, фактор репликации 2
 
-## Стек
+___
+## Архитектура кластера
 
-- **Kubernetes** (Docker Desktop / kind)
-- **Citus** `13.0.3` поверх PostgreSQL
-- **kubectl**, **psql**
 
-## Структура кластера
+Citus-кластер в Kubernetes: два координатора + 5 воркеров (32 шарда, `shard_replication_factor = 2`).
 
-```
-coordinator (1 pod)  ←  все клиентские запросы
-    ↓ распределяет по шардам
-worker-0 .. worker-4 (5 pods, 2 ноды)
-```
+#kubernetes
+### Координаторы
 
-Каждый шард хранится в 2 копиях на разных воркерах — потеря одного воркера не уничтожает данные.
 
-## Ключевые команды
+- Оба координатора в режиме мультимастера — двунаправленная логическая репликация через `origin = none` (Postgres 18).
+- Петли исключены: подписка с `origin = none` игнорирует уже реплицированные изменения.
+- Для репликации используется `CREATE PUBLICATION` / `CREATE SUBSCRIPTION` на обеих сторонах.
 
+
+### Воркеры
+
+
+- Шардированные таблицы (`events` и др.) распределяются по воркерам через `create_distributed_table`.
+- Таблицы с триггерами (например, те, что используют `pg-locker`) **специально не шардируются**, потому что Citus не поддерживает обычные триггеры на distributed-таблицах.
+
+
+#locker
+### pg-locker
+
+
+Отдельный сервис-локер (`locker.locks`) с функциями `try_lock` / `release_lock`:
+
+- хранит глобальные блокировки по `(table_name, key_text, coord_id)`;
+- вызывается из координаторов через `dblink_exec` в триггерах `BEFORE/AFTER` на DML;
+- гарантирует: одна строка (по ключу) не обновляется одновременно с двух координаторов при двунаправленной репликации.
+
+
+___
+## Логическая репликация и мультимастер
+
+
+#replication
+- Односторонняя схема: `CREATE PUBLICATION` на первом координаторе, `CREATE SUBSCRIPTION` на втором, initial copy + постоянный стрим WAL.
+- Двунаправленная схема: две публикации (по одной на координатор), две подписки с `WITH (origin = none, copy_data = false)` после initial sync. Это даёт мультимастер без петель.
+- Конфликты параллельных обновлений одной строки решаются за счёт `pg-locker` — второй координатор просто не получает глобальный лок и транзакция падает.
+
+
+___
+## Схема БД
+
+
+Предметная область — автосервис / рассрочка:
+
+- Пользователи: `app_user`, `app_user_profile`, `app_role`
+- Справочники: `brand`, `drive_type`, `transmission_type`, `capacity`
+- Автомобили: `car`, `car_passport`, `car_image`, `car_service_history`
+- Избранное: `user_favorite_car`
+- Заявки и заказы: `app_request` → `app_order`
+
+Жизненный цикл: пользователь создаёт заявку (`app_request`), менеджер принимает и оформляет заказ (`app_order`).
+
+Весь доступ к данным — **только через хранимые функции/процедуры**.
+
+Роли БД: `guest`, `user`, `manager`, `admin`.
+
+
+___
+## Производительность и шардирование
+
+
+#citus
+- Для больших таблиц (например, `events`) включено шардирование: `citus.shard_count = 32`, `citus.shard_replication_factor = 2`.
+- `create_distributed_table` автоматически создаёт шарды и раскладывает их по воркерам; репликация шардов обеспечивает отказоустойчивость по воркерам.
+- Таблицы с триггерами и сложной логикой оставляются локальными на координаторах и масштабируются через логическую репликацию, а не через Citus.
+- Нагрузочный тест: ≥ 100 000 строк в `app_request`, анализ планов через `EXPLAIN ANALYZE`.
+
+
+___
+## Запуск и проверка
+
+
+#kubernetes
 ```bash
-# Применить манифест
 kubectl apply -f citus-config.yaml
-
-# Статус подов
 kubectl -n citus get pods -o wide
-
-# Доступ к координатору
 kubectl -n citus port-forward svc/citus-coordinator 55432:5432
 psql "host=localhost port=55432 dbname=postgres user=postgres password=111"
 ```
 
 ```sql
--- Зарегистрировать воркеры
-SELECT citus_add_node('citus-worker-0.citus-worker-headless.citus.svc.cluster.local', 5432);
--- ... повторить для worker-1..4
+-- проверить воркеров
+select * from master_get_active_worker_nodes();
 
--- Включить шардирование
-ALTER SYSTEM SET citus.shard_count = 32;
-ALTER SYSTEM SET citus.shard_replication_factor = 2;
-SELECT pg_reload_conf();
+-- проверить, что таблица зашардирована
+select * from pg_dist_shard where logicalrelid = 'events'::regclass;
 
--- Создать distributed-таблицу
-CREATE TABLE events (id bigserial, user_id bigint, payload text);
-SELECT create_distributed_table('events', 'user_id');
+-- проверить статусы подписок
+select * from pg_subscription;
+select * from pg_stat_subscription;
 ```
-
-## Что изучено
-
-- Разница между нодой, подом, StatefulSet и Service в Kubernetes
-- Зачем нужен headless Service для stateful-приложений
-- Как Citus координирует запросы и раскладывает шарды по воркерам
-- Чем `replicas: 5` в StatefulSet отличается от `shard_replication_factor`
