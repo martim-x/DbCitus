@@ -1,168 +1,229 @@
--- DROP TABLE IF EXISTS REJECTED_ORDER;
--- DROP TABLE IF EXISTS ORDER_ITEM;
--- DROP TABLE IF EXISTS APP_ORDER;
--- DROP TABLE IF EXISTS CAR_IMAGE;
--- DROP TABLE IF EXISTS CAR_SERVICE_HISTORY;
--- DROP TABLE IF EXISTS CAR_PASSPORT;
--- DROP TABLE IF EXISTS CAR;
--- DROP TABLE IF EXISTS PROFILE_FILTER_CAPACITY;
--- DROP TABLE IF EXISTS PROFILE_FILTER_USAGE_TYPE;
--- DROP TABLE IF EXISTS PROFILE_FILTER_TRANSMISSION_TYPE;
--- DROP TABLE IF EXISTS PROFILE_FILTER_DRIVE_TYPE;
--- DROP TABLE IF EXISTS PROFILE_FILTER_BRAND;
--- DROP TABLE IF EXISTS CAPACITY;
--- DROP TABLE IF EXISTS CAPACITY_TYPE;
--- DROP TABLE IF EXISTS USAGE_TYPE;
--- DROP TABLE IF EXISTS TRANSMISSION_TYPE;
--- DROP TABLE IF EXISTS DRIVE_TYPE;
--- DROP TABLE IF EXISTS BRAND;
--- DROP TABLE IF EXISTS APP_USER;
--- DROP TABLE IF EXISTS APP_USER_PROFILE;
--- DROP TABLE IF EXISTS APP_ROLE;
-CREATE TABLE
-    APP_ROLE (
-        ID UUID PRIMARY KEY DEFAULT GEN_RANDOM_UUID (),
-        NAME VARCHAR(100) NOT NULL
-    );
+-- warn
+-- drop table if exists app_order_status_history cascade;
+-- drop table if exists app_request_status_history cascade;
+-- drop table if exists app_status cascade;
 
-CREATE TABLE
-    APP_USER_PROFILE (
-        ID UUID PRIMARY KEY DEFAULT GEN_RANDOM_UUID (),
-        NAME VARCHAR(100) NOT NULL,
-        APP_ROLE_ID UUID REFERENCES APP_ROLE (ID),
-        IS_DELETED BOOLEAN DEFAULT FALSE
-    );
+-- warn
+-- drop table if exists profile_filter_brand cascade;
+-- drop table if exists profile_filter_drive_type cascade;
+-- drop table if exists profile_filter_transmission_type cascade;
+-- drop table if exists profile_filter_usage_type cascade;
+-- drop table if exists profile_filter_capacity cascade;
 
-CREATE TABLE
-    APP_USER (
-        ID UUID PRIMARY KEY DEFAULT GEN_RANDOM_UUID (),
-        EMAIL VARCHAR(250) UNIQUE NOT NULL,
-        PASSWORD VARCHAR(128) NOT NULL,
-        APP_USER_PROFILE_ID UUID REFERENCES APP_USER_PROFILE (ID)
-    );
+-- warn
+-- drop table if exists car cascade;
+-- drop table if exists car_passport cascade;
+-- drop table if exists capacity cascade;
+-- drop table if exists capacity_type cascade;
+-- drop table if exists drive_type cascade;
+-- drop table if exists transmission_type cascade;
+-- drop table if exists usage_type cascade;
+-- drop table if exists brand cascade;
 
-CREATE TABLE
-    BRAND (
-        ID UUID PRIMARY KEY DEFAULT GEN_RANDOM_UUID (),
-        NAME VARCHAR(100) NOT NULL
-    );
+-- warn
+-- drop table if exists app_user cascade;
+-- drop table if exists app_user_profile cascade;
+-- drop table if exists app_role cascade;
 
-CREATE TABLE
-    DRIVE_TYPE (
-        ID UUID PRIMARY KEY DEFAULT GEN_RANDOM_UUID (),
-        NAME VARCHAR(100) NOT NULL
-    );
 
-CREATE TABLE
-    TRANSMISSION_TYPE (
-        ID UUID PRIMARY KEY DEFAULT GEN_RANDOM_UUID (),
-        NAME VARCHAR(100) NOT NULL
-    );
+-- ========================
+-- USER
+-- ========================
 
-CREATE TABLE
-    USAGE_TYPE (
-        ID UUID PRIMARY KEY DEFAULT GEN_RANDOM_UUID (),
-        NAME VARCHAR(100) NOT NULL
-    );
+create table app_role (
+    id   uuid primary key default gen_random_uuid(),
 
-CREATE TABLE
-    CAPACITY_TYPE (
-        ID UUID PRIMARY KEY DEFAULT GEN_RANDOM_UUID (),
-        NAME VARCHAR(100) NOT NULL
-    );
+    name varchar(100) not null
+);
 
-CREATE TABLE
-    CAPACITY (
-        ID UUID PRIMARY KEY DEFAULT GEN_RANDOM_UUID (),
-        VALUE INT NOT NULL CHECK (VALUE > 0),
-        CAPACITY_TYPE_ID UUID REFERENCES CAPACITY_TYPE (ID)
-    );
+create table app_user_profile (
+    id         uuid primary key default gen_random_uuid(),
 
-CREATE TABLE
-    PROFILE_FILTER_BRAND (
-        ID UUID PRIMARY KEY DEFAULT GEN_RANDOM_UUID (),
-        APP_USER_PROFILE_ID UUID REFERENCES APP_USER_PROFILE (ID),
-        BRAND_ID UUID REFERENCES BRAND (ID)
-    );
+    name       varchar(100) not null,
+    is_deleted boolean not null default false,
 
-CREATE TABLE
-    PROFILE_FILTER_DRIVE_TYPE (
-        ID UUID PRIMARY KEY DEFAULT GEN_RANDOM_UUID (),
-        APP_USER_PROFILE_ID UUID REFERENCES APP_USER_PROFILE (ID),
-        DRIVE_TYPE_ID UUID REFERENCES DRIVE_TYPE (ID)
-    );
+    app_role_id uuid not null references app_role(id)
+);
 
-CREATE TABLE
-    PROFILE_FILTER_TRANSMISSION_TYPE (
-        ID UUID PRIMARY KEY DEFAULT GEN_RANDOM_UUID (),
-        APP_USER_PROFILE_ID UUID REFERENCES APP_USER_PROFILE (ID),
-        TRANSMISSION_TYPE_ID UUID REFERENCES TRANSMISSION_TYPE (ID)
-    );
+create table app_user (
+    id                  uuid primary key default gen_random_uuid(),
 
-CREATE TABLE
-    PROFILE_FILTER_USAGE_TYPE (
-        ID UUID PRIMARY KEY DEFAULT GEN_RANDOM_UUID (),
-        APP_USER_PROFILE_ID UUID REFERENCES APP_USER_PROFILE (ID),
-        USAGE_TYPE_ID UUID REFERENCES USAGE_TYPE (ID)
-    );
+    email               varchar(250) unique not null,
+    password            varchar(128) not null,
 
-CREATE TABLE
-    PROFILE_FILTER_CAPACITY (
-        ID UUID PRIMARY KEY DEFAULT GEN_RANDOM_UUID (),
-        APP_USER_PROFILE_ID UUID REFERENCES APP_USER_PROFILE (ID),
-        CAPACITY_ID UUID REFERENCES CAPACITY (ID)
-    );
+    app_user_profile_id uuid not null references app_user_profile(id)
+);
 
-CREATE TABLE
-    CAR (
-        ID UUID PRIMARY KEY DEFAULT GEN_RANDOM_UUID (),
-        BRAND_ID UUID REFERENCES BRAND (ID),
-        DRIVE_TYPE_ID UUID REFERENCES DRIVE_TYPE (ID),
-        TRANSMISSION_TYPE_ID UUID REFERENCES TRANSMISSION_TYPE (ID),
-        USAGE_TYPE_ID UUID REFERENCES USAGE_TYPE (ID),
-        CAPACITY_ID UUID REFERENCES CAPACITY (ID)
-    );
+create table app_user_profile_car (
+    id   uuid primary key default gen_random_uuid(),
 
-CREATE TABLE
-    CAR_PASSPORT (
-        ID UUID PRIMARY KEY DEFAULT GEN_RANDOM_UUID (),
-        NAME VARCHAR(100) NOT NULL,
-        DESCRIPTION TEXT NOT NULL,
-        PRICE_OF_ORIGIN DECIMAL(12, 2) NOT NULL CHECK (PRICE_OF_ORIGIN > 0),
-        MANUFACTURE_DATE DATE NOT NULL,
-        COUNTRY_OF_ORIGIN VARCHAR(100) NOT NULL,
-        VIN VARCHAR(17) UNIQUE NOT NULL,
-        ACCIDENT_COUNT INT DEFAULT 0 CHECK (ACCIDENT_COUNT >= 0),
-        CAR_ID UUID REFERENCES CAR (ID),
-        IS_DELETED BOOLEAN DEFAULT FALSE
-    );
+    app_user_profile_id uuid not null references app_user_profile(id),    
+    car_id uuid not null references car(id)
+)
 
-CREATE TABLE
-    APP_ORDER (
-        ID UUID PRIMARY KEY DEFAULT GEN_RANDOM_UUID (),
-        ORDER_DATE DATE NOT NULL,
-        COMMENT TEXT,
-        STATUS VARCHAR(50) DEFAULT 'PENDING',
-        PERIOD_MONTHS INT NOT NULL CHECK (PERIOD_MONTHS > 0),
-        DOWN_PAYMENT DECIMAL(12, 2) NOT NULL CHECK (DOWN_PAYMENT > 0),
-        MONTHLY_PAYMENT DECIMAL(12, 2) NOT NULL CHECK (MONTHLY_PAYMENT > 0),
-        APP_USER_ID UUID REFERENCES APP_USER (ID),
-        MANAGER_ID UUID REFERENCES APP_USER (ID),
-        IS_DELETED BOOLEAN DEFAULT FALSE
-    );
 
-CREATE TABLE
-    ORDER_ITEM (
-        ID UUID PRIMARY KEY DEFAULT GEN_RANDOM_UUID (),
-        CAR_ID UUID REFERENCES CAR (ID),
-        APP_ORDER_ID UUID REFERENCES APP_ORDER (ID)
-    );
+-- ========================
+-- CAR DICT
+-- ========================
 
-CREATE TABLE
-    REJECTED_ORDER (
-        ID UUID PRIMARY KEY DEFAULT GEN_RANDOM_UUID (),
-        REASON TEXT,
-        CREATED_AT TIMESTAMP DEFAULT NOW (),
-        APP_ORDER_ID UUID REFERENCES APP_ORDER (ID),
-        APP_MANAGER_ID UUID REFERENCES APP_USER (ID)
-    );
+create table brand (
+    id   uuid primary key default gen_random_uuid(),
+
+    name varchar(100) not null
+);
+
+create table drive_type (
+    id   uuid primary key default gen_random_uuid(),
+
+    name varchar(100) not null
+);
+
+create table transmission_type (
+    id   uuid primary key default gen_random_uuid(),
+
+    name varchar(100) not null
+);
+
+create table usage_type (
+    id   uuid primary key default gen_random_uuid(),
+
+    name varchar(100) not null
+);
+
+create table capacity_type (
+    id   uuid primary key default gen_random_uuid(),
+
+    name varchar(100) not null
+);
+
+create table capacity (
+    id              uuid primary key default gen_random_uuid(),
+
+    value           int not null check (value > 0),
+
+    capacity_type_id uuid not null references capacity_type(id)
+);
+
+-- ========================
+-- USER'S FILTERS
+-- ========================
+
+create table profile_filter_brand (
+    id                  uuid primary key default gen_random_uuid(),
+
+    app_user_profile_id uuid not null references app_user_profile(id),
+    brand_id            uuid not null references brand(id)
+);
+
+create table profile_filter_drive_type (
+    id                  uuid primary key default gen_random_uuid(),
+
+    app_user_profile_id uuid not null references app_user_profile(id),
+    drive_type_id       uuid not null references drive_type(id)
+);
+
+create table profile_filter_transmission_type (
+    id                  uuid primary key default gen_random_uuid(),
+
+    app_user_profile_id uuid not null references app_user_profile(id),
+    transmission_type_id uuid not null references transmission_type(id)
+);
+
+create table profile_filter_usage_type (
+    id                  uuid primary key default gen_random_uuid(),
+
+    app_user_profile_id uuid not null references app_user_profile(id),
+    usage_type_id       uuid not null references usage_type(id)
+);
+
+create table profile_filter_capacity (
+    id                  uuid primary key default gen_random_uuid(),
+
+    app_user_profile_id uuid not null references app_user_profile(id),
+    capacity_id         uuid not null references capacity(id)
+);
+
+-- ========================
+-- CAR
+-- ========================
+
+create table car (
+    id                  uuid primary key default gen_random_uuid(),
+
+    name                varchar(100) not null,
+    price_of_origin     numeric(12, 2) not null check (price_of_origin > 0),
+    manufacture_date    date not null,
+    country_of_origin   varchar(100) not null,
+    description         text not null,
+
+    is_deleted          boolean not null default false,
+
+    brand_id            uuid not null references brand(id),
+    drive_type_id       uuid not null references drive_type(id),
+    transmission_type_id uuid not null references transmission_type(id),
+    usage_type_id       uuid not null references usage_type(id),
+    capacity_id         uuid not null references capacity(id)
+);
+
+-- ========================
+-- APP_ORDER & APP_REQUEST
+-- ========================
+
+create table app_request (
+    id          uuid primary key default gen_random_uuid(),
+
+    app_user_id uuid not null references app_user(id),
+    car_id      uuid not null references car(id),
+    comment     text,
+
+    is_deleted  boolean not null default false
+);
+
+create table app_order (
+    id              uuid primary key default gen_random_uuid(),
+
+    comment         text,
+    order_date      date not null,
+    period_months   int not null check (period_months > 0),
+    down_payment    numeric(12, 2) not null check (down_payment > 0),
+    monthly_payment numeric(12, 2) not null check (monthly_payment > 0),
+
+    is_deleted      boolean not null default false,
+
+    app_user_id     uuid not null references app_user(id),
+    manager_id      uuid not null references app_user(id),
+    app_request_id  uuid not null references app_request(id)
+);
+
+-- ========================
+-- STATUS
+-- ========================
+
+create table app_status (
+    id   uuid primary key default gen_random_uuid(),
+    name varchar(100) not null
+    -- 'REQUEST_PENDING', 'REQUEST_ACCEPTED', 'REQUEST_CANCELLED',
+    -- 'ORDER_PENDING',   'ORDER_ACCEPTED',   'ORDER_CANCELLED'
+);
+
+-- ========================
+-- STATUS HISTORY
+-- ========================
+
+create table app_request_status_history (
+    id             uuid primary key default gen_random_uuid(),
+
+    created_at     timestamptz not null default now(),
+
+    app_status_id  uuid not null references app_status(id),
+    app_request_id uuid not null references app_request(id)
+);
+
+create table app_order_status_history (
+    id            uuid primary key default gen_random_uuid(),
+
+    created_at    timestamptz not null default now(),
+
+    app_status_id uuid not null references app_status(id),
+    app_order_id  uuid not null references app_order(id)
+);
